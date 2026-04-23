@@ -14,6 +14,10 @@
         .btn-outline { border: 2px solid #e2e8f0; border-radius: 8px; padding: 10px 20px; transition: all 0.2s; }
         .btn-outline:hover { background-color: #f1f5f9; border-color: #cbd5e1; }
         
+        .timer-active { color: #2563eb; font-weight: bold; }
+        .timer-warning { color: #dc2626; font-weight: bold; animation: pulse 1s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
         .cartoon-container {
             display: flex;
             align-items: center;
@@ -44,17 +48,6 @@
             justify-content: center;
         }
         .zoom-overlay img { max-width: 95vw; max-height: 95vh; }
-        .loading-spinner {
-            border: 3px solid #f3f3f3;
-            border-top: 3px solid #3498db;
-            border-radius: 50%;
-            width: 16px;
-            height: 16px;
-            animation: spin 1s linear infinite;
-            display: inline-block;
-            margin-right: 8px;
-        }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         
         .checkbox-item {
             display: flex;
@@ -69,9 +62,14 @@
 <body class="min-h-screen p-4 md:p-8">
 
     <div id="app" class="max-w-5xl mx-auto">
-        <header class="mb-8 text-center border-b pb-4">
-            <h1 class="text-3xl font-bold text-slate-900">Oral Exam Practice</h1>
-            <p id="mode-badge" class="text-sm font-semibold uppercase tracking-wider text-blue-600 mt-2">Simulator Ready</p>
+        <header class="mb-8 flex flex-col md:flex-row justify-between items-center border-b pb-4 gap-4">
+            <div>
+                <h1 class="text-3xl font-bold text-slate-900">Oral Exam Practice</h1>
+                <p id="mode-badge" class="text-sm font-semibold uppercase tracking-wider text-blue-600">Manual Mode</p>
+            </div>
+            <div id="timer-display" class="text-2xl font-mono bg-slate-100 px-6 py-2 rounded-lg border hidden">
+                00:00
+            </div>
         </header>
         <main id="view-container"></main>
     </div>
@@ -81,9 +79,6 @@
     </div>
 
     <script>
-        // IMPORTANT: Paste your API Key between the quotes below
-        const apiKey = ""; 
-
         const CARTOONS = [
             { id: 1, topic: 'Health Education', title: 'Big Problem', file: 'cartoon1_big_problem.jpg' },
             { id: 2, topic: 'Health Education', title: 'Child Obesity', file: 'cartoon2_health_education.jpg' },
@@ -107,77 +102,50 @@
             "I spoke fluently with minimal hesitation."
         ];
 
-        let state = { mode: 'practice', topic: null, studentA: null, studentB: null, notesA: "", notesB: "" };
+        let state = { 
+            topic: null, 
+            studentA: null, 
+            studentB: null, 
+            notesA: "", 
+            notesB: "",
+            timeLeft: 0,
+            timerInterval: null
+        };
 
         const viewContainer = document.getElementById('view-container');
+        const timerDisplay = document.getElementById('timer-display');
 
-        async function callGemini(prompt, systemPrompt = "", isImage = false, imageData = null) {
-            if (!apiKey) throw new Error("API Key is missing!");
-            
-            // We use the stable flash model for best results in educational tools
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
-            
-            const contents = [{ parts: [{ text: prompt }] }];
-            if (isImage && imageData) {
-                contents[0].parts.push({ inlineData: { mimeType: "image/jpeg", data: imageData.split(',')[1] } });
-            }
+        function startTimer(seconds, onComplete) {
+            clearInterval(state.timerInterval);
+            state.timeLeft = seconds;
+            timerDisplay.classList.remove('hidden');
+            updateTimerUI();
 
-            try {
-                const response = await fetch(url, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ contents, systemInstruction: { parts: [{ text: systemPrompt }] } })
-                });
-
-                const result = await response.json();
-
-                if (!response.ok) {
-                    const errorMsg = result.error?.message || "Unknown API error";
-                    throw new Error(errorMsg);
+            state.timerInterval = setInterval(() => {
+                state.timeLeft--;
+                updateTimerUI();
+                if (state.timeLeft <= 0) {
+                    clearInterval(state.timerInterval);
+                    if (onComplete) onComplete();
                 }
+            }, 1000);
+        }
 
-                return result.candidates[0].content.parts[0].text;
-            } catch (err) {
-                console.error("Gemini Error:", err);
-                throw err;
+        function updateTimerUI() {
+            const mins = Math.floor(state.timeLeft / 60);
+            const secs = state.timeLeft % 60;
+            timerDisplay.innerText = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+            
+            if (state.timeLeft < 30) {
+                timerDisplay.className = "text-2xl font-mono bg-red-50 px-6 py-2 rounded-lg border border-red-200 timer-warning";
+            } else {
+                timerDisplay.className = "text-2xl font-mono bg-slate-100 px-6 py-2 rounded-lg border timer-active";
             }
         }
 
-        async function getCartoonAnalysis(studentId) {
-            const cartoon = studentId === 'A' ? state.studentA : state.studentB;
-            const btn = document.getElementById(`ai-btn-${studentId}`);
-            const resultArea = document.getElementById(`ai-result-${studentId}`);
-            
-            btn.disabled = true;
-            btn.innerHTML = `<span class="loading-spinner"></span> Analyzing...`;
-            resultArea.classList.remove('hidden');
-            resultArea.innerHTML = `<p class="text-xs animate-pulse italic">Gemini is looking at the cartoon...</p>`;
-
-            try {
-                const response = await fetch(cartoon.file);
-                if (!response.ok) throw new Error(`Image file not found: ${cartoon.file}`);
-                
-                const blob = await response.blob();
-                const reader = new FileReader();
-                reader.onloadend = async () => {
-                    try {
-                        const analysis = await callGemini(`Describe and analyze this cartoon titled "${cartoon.title}" for a Grade 12 English oral exam. Focus on the message about ${cartoon.topic}.`, "You are an experienced English teacher. Provide a structured analysis with headings: Description, Analysis, and Evaluation.", true, reader.result);
-                        resultArea.innerHTML = `<div class="text-xs space-y-2">${analysis.replace(/\n/g, '<br>')}</div>`;
-                    } catch (err) {
-                        resultArea.innerHTML = `<div class="p-2 bg-red-50 text-red-600 rounded border border-red-200 text-[10px]">
-                            <strong>AI Error:</strong> ${err.message}<br>
-                            <span class="mt-1 block">Check your API key in Google AI Studio.</span>
-                        </div>`;
-                    }
-                    btn.innerHTML = `✨ Analyze Again`;
-                    btn.disabled = false;
-                };
-                reader.readAsDataURL(blob);
-            } catch (err) {
-                resultArea.innerHTML = `<p class="text-xs text-red-500">Local Error: ${err.message}</p>`;
-                btn.disabled = false;
-                btn.innerHTML = `✨ Try Again`;
-            }
+        function stopTimer() {
+            clearInterval(state.timerInterval);
+            timerDisplay.classList.add('hidden');
         }
 
         function openZoom(src) {
@@ -188,12 +156,19 @@
         function closeZoom() { document.getElementById('zoom-modal').style.display = 'none'; }
 
         function renderStart() {
+            stopTimer();
             viewContainer.innerHTML = `
                 <div class="exam-card p-8 text-center max-w-lg mx-auto">
-                    <h2 class="text-xl font-bold mb-6 italic text-slate-600">Select a Topic to Begin</h2>
-                    <div class="grid grid-cols-1 gap-4">
-                        <button onclick="startPrep('Learning and Teaching')" class="btn-primary">Learning and Teaching</button>
-                        <button onclick="startPrep('Health Education')" class="btn-primary">Health Education</button>
+                    <h2 class="text-xl font-bold mb-6 italic text-slate-600">Choose Topic & Preparation Time</h2>
+                    <div class="space-y-4">
+                        <select id="prep-time-select" class="w-full p-2 border rounded-lg mb-4">
+                            <option value="300">5 Minutes (Standard Prep)</option>
+                            <option value="600">10 Minutes (Longer Prep)</option>
+                            <option value="900">15 Minutes (Extended Prep)</option>
+                            <option value="10">10 Seconds (Testing)</option>
+                        </select>
+                        <button onclick="startPrep('Learning and Teaching')" class="btn-primary w-full">Learning and Teaching</button>
+                        <button onclick="startPrep('Health Education')" class="btn-primary w-full">Health Education</button>
                     </div>
                 </div>
             `;
@@ -201,11 +176,17 @@
 
         function startPrep(topic) {
             state.topic = topic;
+            const time = parseInt(document.getElementById('prep-time-select').value);
             let pool = CARTOONS.filter(c => c.topic === topic);
             const shuffled = pool.sort(() => 0.5 - Math.random());
             state.studentA = shuffled[0];
             state.studentB = shuffled[1] || shuffled[0];
+            
             renderPrep();
+            startTimer(time, () => {
+                alert("Preparation time is up! Moving to presentation.");
+                saveNotes();
+            });
         }
 
         function renderPrep() {
@@ -214,19 +195,17 @@
                     <div class="exam-card p-4">
                         <h3 class="font-bold text-blue-600 mb-2">Student A</h3>
                         <div class="cartoon-container mb-4" onclick="openZoom('${state.studentA.file}')"><img src="${state.studentA.file}"></div>
-                        <button id="ai-btn-A" onclick="getCartoonAnalysis('A')" class="w-full bg-slate-100 text-slate-700 py-1 rounded text-xs font-bold border mb-2">✨ Analyze with AI</button>
-                        <div id="ai-result-A" class="hidden p-3 bg-slate-50 border rounded text-[11px] mb-2 max-h-40 overflow-y-auto"></div>
-                        <textarea id="notes-a" class="w-full border p-2 text-sm rounded h-32" placeholder="Write your preparation notes here..."></textarea>
+                        <p class="text-[10px] text-slate-400 mb-2">Topic: ${state.studentA.title}</p>
+                        <textarea id="notes-a" class="w-full border p-2 text-sm rounded h-40" placeholder="Analyze the cartoon here..."></textarea>
                     </div>
                     <div class="exam-card p-4">
                         <h3 class="font-bold text-green-600 mb-2">Student B</h3>
                         <div class="cartoon-container mb-4" onclick="openZoom('${state.studentB.file}')"><img src="${state.studentB.file}"></div>
-                        <button id="ai-btn-B" onclick="getCartoonAnalysis('B')" class="w-full bg-slate-100 text-slate-700 py-1 rounded text-xs font-bold border mb-2">✨ Analyze with AI</button>
-                        <div id="ai-result-B" class="hidden p-3 bg-slate-50 border rounded text-[11px] mb-2 max-h-40 overflow-y-auto"></div>
-                        <textarea id="notes-b" class="w-full border p-2 text-sm rounded h-32" placeholder="Write your preparation notes here..."></textarea>
+                        <p class="text-[10px] text-slate-400 mb-2">Topic: ${state.studentB.title}</p>
+                        <textarea id="notes-b" class="w-full border p-2 text-sm rounded h-40" placeholder="Analyze the cartoon here..."></textarea>
                     </div>
                     <div class="md:col-span-2 text-center">
-                        <button onclick="saveNotes()" class="btn-primary w-full md:w-64">Start Exam Presentation</button>
+                        <button onclick="saveNotes()" class="btn-primary w-full md:w-64">Ready Before Time?</button>
                     </div>
                 </div>
             `;
@@ -241,27 +220,51 @@
         function renderExam(student) {
             const cartoon = student === 'A' ? state.studentA : state.studentB;
             const next = student === 'A' ? "renderExam('B')" : "renderDiscussion()";
+            
+            // Set 3 minute timer for monologue
+            startTimer(180, () => {
+                alert(`Time is up for Student ${student}!`);
+            });
+
             viewContainer.innerHTML = `
                 <div class="max-w-2xl mx-auto exam-card p-6">
-                    <h2 class="text-xl font-bold mb-4">Student ${student} Presentation</h2>
-                    <div class="cartoon-container h-64 mb-6"><img src="${cartoon.file}"></div>
-                    <div class="bg-blue-50 p-4 rounded-lg mb-6">
-                        <h4 class="font-bold text-sm mb-2">Presentation Steps:</h4>
-                        <ol class="list-decimal ml-5 text-sm space-y-1">
-                            <li>Describe the cartoon details.</li>
-                            <li>Analyze the underlying message.</li>
-                            <li>Evaluate the topic personally.</li>
-                        </ol>
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-bold">Student ${student} Presentation</h2>
+                        <span class="text-xs bg-slate-100 px-2 py-1 rounded">3 Minute Limit</span>
                     </div>
-                    <button onclick="${next}" class="btn-primary w-full">Move to Next Phase</button>
+                    <div class="cartoon-container h-64 mb-6"><img src="${cartoon.file}"></div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                        <div class="bg-blue-50 p-4 rounded-lg">
+                            <h4 class="font-bold text-xs mb-2 uppercase">Your Notes:</h4>
+                            <p class="text-sm italic text-slate-700 whitespace-pre-wrap">${student === 'A' ? state.notesA : state.notesB || 'No notes taken.'}</p>
+                        </div>
+                        <div class="bg-slate-50 p-4 rounded-lg text-sm">
+                            <h4 class="font-bold text-xs mb-2 uppercase">Expectations:</h4>
+                            <ul class="list-disc ml-4 space-y-1">
+                                <li>Describe details</li>
+                                <li>Explain message</li>
+                                <li>State opinion</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <button onclick="${next}" class="btn-primary w-full">Next Phase</button>
                 </div>
             `;
         }
 
         function renderDiscussion() {
+            // Set 10 minute timer for discussion (600 seconds)
+            startTimer(600, () => {
+                alert("Discussion time is over.");
+                renderFinal();
+            });
+
             viewContainer.innerHTML = `
                 <div class="max-w-2xl mx-auto exam-card p-6">
-                    <h2 class="text-xl font-bold mb-4">Pair Discussion</h2>
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-bold">Pair Discussion</h2>
+                        <span class="text-xs bg-slate-100 px-2 py-1 rounded">10 Minute Limit</span>
+                    </div>
                     <div class="p-4 border-l-4 border-blue-500 bg-slate-50 mb-6">
                         <p class="font-medium">"Discuss how the issues shown in both cartoons affect society today and what changes might be necessary."</p>
                     </div>
@@ -276,21 +279,20 @@
         }
 
         function renderFinal() {
+            stopTimer();
             viewContainer.innerHTML = `
                 <div class="max-w-lg mx-auto text-center exam-card p-8">
                     <h2 class="text-2xl font-bold mb-2">Exam Complete!</h2>
-                    <p class="text-slate-500 mb-6">Great job. Take a moment to reflect on your performance.</p>
+                    <p class="text-slate-500 mb-6">Self-Reflection Phase</p>
                     <div class="text-left space-y-2 mb-8">
                         ${SELF_EVAL_CRITERIA.map(c => `<label class="checkbox-item border-b"><input type="checkbox" class="w-4 h-4"> <span class="text-sm">${c}</span></label>`).join('')}
                     </div>
-                    <button onclick="location.reload()" class="btn-outline w-full">Restart Simulator</button>
+                    <button onclick="renderStart()" class="btn-outline w-full">Back to Start</button>
                 </div>
             `;
         }
 
         window.onload = renderStart;
     </script>
-</body>
-</html>
 </body>
 </html>
