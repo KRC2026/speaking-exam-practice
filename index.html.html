@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Oral Exam Practice App</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; color: #1e293b; }
+        .timer-warning { color: #dc2626; font-weight: bold; animation: pulse 1s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .exam-card { border: 1px solid #e2e8f0; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border-radius: 8px; }
+        .btn-primary { background-color: #2563eb; color: white; transition: all 0.2s; }
+        .btn-primary:hover { background-color: #1d4ed8; }
+        .btn-outline { border: 2px solid #e2e8f0; transition: all 0.2s; }
+        .btn-outline:hover { background-color: #f1f5f9; border-color: #cbd5e1; }
+        .support-box { background-color: #f8fafc; border-left: 4px solid #3b82f6; padding: 1rem; margin-top: 1rem; }
+        
+        .cartoon-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #f1f5f9;
+            overflow: hidden;
+            cursor: zoom-in;
+            border: 1px solid #e2e8f0;
+            border-radius: 4px;
+            position: relative;
+        }
+        .cartoon-container img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+        .zoom-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.9);
+            display: none;
+            z-index: 1000;
+            cursor: zoom-out;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .zoom-overlay img {
+            max-width: 95vw;
+            max-height: 95vh;
+            object-fit: contain;
+            box-shadow: 0 0 30px rgba(0,0,0,0.5);
+        }
+        .loading-spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3498db;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            vertical-align: middle;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        .checkbox-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 10px;
+            border-radius: 6px;
+            transition: background 0.2s;
+            cursor: pointer;
+        }
+        .checkbox-item:hover { background-color: #f1f5f9; }
+        .checkbox-item input[type="checkbox"] { width: 18px; height: 18px; margin-top: 2px; cursor: pointer; }
+    </style>
+</head>
+<body class="min-h-screen p-4 md:p-8">
+
+    <div id="app" class="max-w-5xl mx-auto">
+        <header class="mb-8 text-center border-b pb-4">
+            <h1 class="text-3xl font-bold text-slate-900">Oral Exam Practice</h1>
+            <p id="mode-badge" class="text-sm font-semibold uppercase tracking-wider text-blue-600 mt-2"></p>
+        </header>
+        <main id="view-container"></main>
+    </div>
+
+    <div id="zoom-modal" class="zoom-overlay" onclick="closeZoom()">
+        <img id="zoomed-image" src="" alt="Zoomed view">
+        <div class="absolute top-4 right-4 text-white text-sm font-bold bg-black/50 px-3 py-1 rounded">Click anywhere to close</div>
+    </div>
+
+    <script>
+        const apiKey = ""; 
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+
+        const CARTOONS = [
+            { id: 1, topic: 'Health Education', title: 'Big Problem', file: 'cartoon1_big_problem.jpg' },
+            { id: 2, topic: 'Health Education', title: 'Child Obesity', file: 'cartoon2_health_education.jpg' },
+            { id: 3, topic: 'Learning and Teaching', title: 'I Can Be Upgraded, Can You?', file: 'cartoon3_I_can_be_upgraded.jpg' },
+            { id: 4, topic: 'Learning and Teaching', title: 'School ends, learning doesn\'t', file: 'cartoon4_school_ends_learning_doesnt.jpg' },
+            { id: 5, topic: 'Learning and Teaching', title: 'Writing is just like texting', file: 'cartoon5_writing_is_like_texting.jpg' },
+            { id: 6, topic: 'Learning and Teaching', title: 'If you can\'t beat \'em...', file: 'cartoon6_text_me_your_homework.jpg' }
+        ];
+
+        const DISCUSSION_PHRASES = {
+            "Starting the discussion": ["Let's begin/start with ..."],
+            "Giving an opinion": ["As far as I'm concerned ...", "I think ...", "In my opinion ..."],
+            "Agreeing / disagreeing": ["I totally agree.", "I don't agree at all.", "However, ..."],
+            "Asking for clarification": ["What do you think?", "What do you mean?"],
+            "Interrupting politely": ["I'm sorry, but ...", "May I add something?"],
+            "Referring to viewpoints": ["On the one hand ...", "They claim that ..."],
+            "Keeping the discussion going": ["Let's get back to ...", "Where were we?"]
+        };
+
+        const SELF_EVAL_CRITERIA = [
+            "I addressed all parts of the task (describe, analyse, evaluate).",
+            "I used a variety of linking words and discussion phrases.",
+            "I interacted naturally with my partner.",
+            "I expressed my opinion clearly and justified it.",
+            "I used correct grammar and appropriate vocabulary.",
+            "I maintained eye contact and spoke fluently."
+        ];
+
+        let state = {
+            mode: null, 
+            topic: null, 
+            studentA: null,
+            studentB: null,
+            discussionTask: null,
+            timer: 0,
+            timerInterval: null,
+            notesA: "",
+            notesB: ""
+        };
+
+        const viewContainer = document.getElementById('view-container');
+        const modeBadge = document.getElementById('mode-badge');
+
+        async function callGemini(prompt, systemPrompt = "", isImage = false, imageData = null) {
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+            
+            const contents = [{ parts: [{ text: prompt }] }];
+            if (isImage && imageData) {
+                contents[0].parts.push({
+                    inlineData: { mimeType: "image/jpeg", data: imageData.split(',')[1] }
+                });
+            }
+
+            const payload = {
+                contents: contents,
+                systemInstruction: { parts: [{ text: systemPrompt }] }
+            };
+
+            for (let i = 0; i < 5; i++) {
+                try {
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    if (!response.ok) throw new Error("API Error");
+                    const result = await response.json();
+                    return result.candidates?.[0]?.content?.parts?.[0]?.text;
+                } catch (e) {
+                    await new Promise(r => setTimeout(r, Math.pow(2, i) * 1000));
+                }
+            }
+            throw new Error("Could not connect to Gemini.");
+        }
+
+        async function getCartoonAnalysis(studentId) {
+            const cartoon = studentId === 'A' ? state.studentA : state.studentB;
+            const btn = document.getElementById(`ai-btn-${studentId}`);
+            const resultArea = document.getElementById(`ai-result-${studentId}`);
+            
+            btn.disabled = true;
+            btn.innerHTML = `<span class="loading-spinner"></span> Thinking...`;
+            resultArea.classList.remove('hidden');
+            resultArea.innerHTML = `<p class="text-xs animate-pulse">Analyzing...</p>`;
+
+            try {
+                // If running via file:// protocol, this fetch will likely fail.
+                const response = await fetch(cartoon.file);
+                const blob = await response.blob();
+                const reader = new FileReader();
+                
+                reader.onloadend = async () => {
+                    try {
+                        const base64data = reader.result;
+                        const systemPrompt = "Analyze the cartoon: 1. Description, 2. Analysis, 3. Evaluation.";
+                        const analysis = await callGemini(`Analyze "${cartoon.title}" for topic: ${cartoon.topic}`, systemPrompt, true, base64data);
+                        resultArea.innerHTML = `<div class="prose prose-sm text-xs">${analysis.replace(/\n/g, '<br>')}</div>`;
+                    } catch (err) {
+                        resultArea.innerHTML = `<p class="text-xs text-red-500 font-bold">API Error: Make sure your internet is working and API keys are valid.</p>`;
+                    }
+                    btn.disabled = false;
+                    btn.innerHTML = `✨ Analyze Again`;
+                };
+                reader.readAsDataURL(blob);
+            } catch (err) {
+                resultArea.innerHTML = `
+                    <div class="text-xs text-red-600 bg-red-50 p-2 rounded border border-red-200">
+                        <strong>Security Error:</strong> Browsers block AI analysis when opening the file directly from a folder.<br><br>
+                        <strong>How to fix:</strong> Use a "Live Server" extension in VS Code or upload these files to a web host.
+                    </div>
+                `;
+                btn.disabled = false;
+                btn.innerHTML = `✨ Try Analysis Again`;
+            }
+        }
+
+        async function evaluateDiscussion() {
+            const btn = document.getElementById('ai-eval-btn');
+            const resultArea = document.getElementById('ai-eval-result');
+            btn.disabled = true;
+            btn.innerHTML = `<span class="loading-spinner"></span> Thinking...`;
+            resultArea.classList.remove('hidden');
+
+            try {
+                const systemPrompt = "You are an examiner. Provide feedback on oral exam notes.";
+                const prompt = `Topic: ${state.topic}. Task: ${state.discussionTask.question}. \nStudent A: ${state.notesA}. \nStudent B: ${state.notesB}.`;
+                const feedback = await callGemini(prompt, systemPrompt);
+                resultArea.innerHTML = `<div class="bg-blue-50 p-4 rounded border border-blue-200 text-sm mt-4"><strong>Feedback:</strong><br>${feedback}</div>`;
+                btn.classList.add('hidden');
+            } catch (err) {
+                resultArea.innerHTML = `<p class="text-red-500 text-sm">Failed to generate feedback.</p>`;
+                btn.disabled = false;
+                btn.innerHTML = `✨ Evaluate Discussion Content`;
+            }
+        }
+
+        function setMode(mode) {
+            state.mode = mode;
+            modeBadge.innerText = mode === 'practice' ? 'Practice Mode' : 'Exam Mode';
+        }
+
+        function openZoom(src) {
+            const modal = document.getElementById('zoom-modal');
+            const img = document.getElementById('zoomed-image');
+            img.src = src;
+            modal.style.display = 'flex';
+        }
+
+        function closeZoom() { document.getElementById('zoom-modal').style.display = 'none'; }
+
+        function startPreparation(topic) {
+            state.topic = topic;
+            let pool = topic === 'Mixed' ? [...CARTOONS] : CARTOONS.filter(c => c.topic === topic);
+            const shuffled = pool.sort(() => 0.5 - Math.random());
+            state.studentA = shuffled[0];
+            state.studentB = shuffled[1] || shuffled[0];
+            state.discussionTask = { question: "Discuss the societal impact of these trends.", prompts: ["Individual responsibility", "Role of technology", "Future outlook"] };
+            renderPreparation();
+        }
+
+        function renderStartScreen() {
+            viewContainer.innerHTML = `
+                <div class="exam-card p-8 text-center max-w-2xl mx-auto">
+                    <h2 class="text-xl font-bold mb-6">Oral Exam Simulator</h2>
+                    <div class="space-y-6">
+                        <div class="flex gap-4 justify-center">
+                            <button onclick="setMode('practice')" class="btn-outline px-6 py-2 rounded-lg">Practice</button>
+                            <button onclick="setMode('exam')" class="btn-outline px-6 py-2 rounded-lg">Exam</button>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                            <button onclick="startPreparation('Learning and Teaching')" class="btn-primary p-4 rounded-lg text-sm">Learning & Teaching</button>
+                            <button onclick="startPreparation('Health Education')" class="btn-primary p-4 rounded-lg text-sm">Health Education</button>
+                            <button onclick="startPreparation('Mixed')" class="btn-primary p-4 rounded-lg text-sm">Mixed Topics</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderPreparation() {
+            viewContainer.innerHTML = `
+                <div class="space-y-6">
+                    <div class="flex justify-between items-center bg-white p-4 exam-card sticky top-0 z-10">
+                        <span class="font-bold">Preparation Phase</span>
+                        <button onclick="saveNotes()" class="btn-primary px-4 py-1 text-sm rounded">Start Exam</button>
+                    </div>
+                    <div class="grid md:grid-cols-2 gap-6">
+                        <div class="exam-card p-4 flex flex-col">
+                            <h3 class="font-bold text-blue-700">Student A</h3>
+                            <div class="cartoon-container h-48 my-2" onclick="openZoom('${state.studentA.file}')"><img src="${state.studentA.file}"></div>
+                            <button id="ai-btn-A" onclick="getCartoonAnalysis('A')" class="text-xs bg-purple-50 text-purple-700 py-1 mb-2 rounded border">✨ Analyze with Gemini</button>
+                            <div id="ai-result-A" class="hidden p-2 bg-slate-50 border rounded text-[10px] mb-2 max-h-32 overflow-y-auto"></div>
+                            <textarea id="notes-a" class="w-full p-2 text-xs border rounded h-32" placeholder="Notes..."></textarea>
+                        </div>
+                        <div class="exam-card p-4 flex flex-col">
+                            <h3 class="font-bold text-green-700">Student B</h3>
+                            <div class="cartoon-container h-48 my-2" onclick="openZoom('${state.studentB.file}')"><img src="${state.studentB.file}"></div>
+                            <button id="ai-btn-B" onclick="getCartoonAnalysis('B')" class="text-xs bg-purple-50 text-purple-700 py-1 mb-2 rounded border">✨ Analyze with Gemini</button>
+                            <div id="ai-result-B" class="hidden p-2 bg-slate-50 border rounded text-[10px] mb-2 max-h-32 overflow-y-auto"></div>
+                            <textarea id="notes-b" class="w-full p-2 text-xs border rounded h-32" placeholder="Notes..."></textarea>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function saveNotes() {
+            state.notesA = document.getElementById('notes-a').value;
+            state.notesB = document.getElementById('notes-b').value;
+            renderMonologue('A');
+        }
+
+        function renderMonologue(studentId) {
+            const nextStep = studentId === 'A' ? "renderMonologue('B')" : "renderDiscussion()";
+            viewContainer.innerHTML = `
+                <div class="max-w-2xl mx-auto space-y-6">
+                    <div class="flex justify-between items-center bg-white p-4 exam-card">
+                        <span class="font-bold">Student ${studentId} Monologue</span>
+                        <button onclick="${nextStep}" class="btn-primary px-4 py-1 rounded">Next</button>
+                    </div>
+                    <div class="exam-card p-4">
+                        <div class="cartoon-container h-64 mb-4"><img src="${studentId === 'A' ? state.studentA.file : state.studentB.file}"></div>
+                        <div class="grid grid-cols-2 gap-4 text-xs">
+                            <div class="bg-blue-50 p-3 rounded"><strong>Task:</strong> Describe, Analyse, Evaluate.</div>
+                            <div class="bg-slate-50 p-3 rounded h-40 overflow-y-auto">${Object.values(DISCUSSION_PHRASES).flat().map(p => `<p>• ${p}</p>`).join('')}</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderDiscussion() {
+            viewContainer.innerHTML = `
+                <div class="max-w-2xl mx-auto space-y-6">
+                    <div class="flex justify-between items-center bg-white p-4 exam-card">
+                        <span class="font-bold">Pair Discussion</span>
+                        <button onclick="renderEndScreen()" class="btn-primary px-4 py-1 rounded">Finish</button>
+                    </div>
+                    <div class="exam-card p-6 border-t-4 border-t-blue-500">
+                        <p class="text-lg font-medium mb-4">${state.discussionTask.question}</p>
+                        <ul class="list-disc ml-5 mb-4 text-sm">${state.discussionTask.prompts.map(p => `<li>${p}</li>`).join('')}</ul>
+                        <div class="bg-slate-50 p-3 rounded text-xs h-48 overflow-y-auto">
+                            <strong>Useful Phrases:</strong><br>${Object.values(DISCUSSION_PHRASES).flat().join(' | ')}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderEndScreen() {
+            viewContainer.innerHTML = `
+                <div class="max-w-2xl mx-auto space-y-6">
+                    <div class="exam-card p-8 text-center">
+                        <h2 class="text-2xl font-bold mb-4">Exam Finished</h2>
+                        <div class="text-left bg-slate-50 p-4 rounded-lg mb-6 border">
+                            <h3 class="font-bold mb-2">Self-Evaluation</h3>
+                            ${SELF_EVAL_CRITERIA.map((text, i) => `<label class="checkbox-item"><input type="checkbox"><span class="text-sm">${text}</span></label>`).join('')}
+                        </div>
+                        <button id="ai-eval-btn" onclick="evaluateDiscussion()" class="btn-primary w-full py-3 rounded-lg font-bold">✨ Get AI feedback on my notes</button>
+                        <div id="ai-eval-result" class="hidden text-left mb-6"></div>
+                        <button onclick="location.reload()" class="mt-4 text-slate-500 text-sm underline">Restart</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        window.onload = renderStartScreen;
+    </script>
+</body>
+</html>
