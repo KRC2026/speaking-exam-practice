@@ -65,7 +65,7 @@
         <header class="mb-8 flex flex-col md:flex-row justify-between items-center border-b pb-4 gap-4">
             <div>
                 <h1 class="text-3xl font-bold text-slate-900">Oral Exam Practice</h1>
-                <p id="mode-badge" class="text-sm font-semibold uppercase tracking-wider text-blue-600">Manual Mode</p>
+                <p id="mode-badge" class="text-sm font-semibold uppercase tracking-wider text-blue-600">Ready</p>
             </div>
             <div id="timer-display" class="text-2xl font-mono bg-slate-100 px-6 py-2 rounded-lg border hidden">
                 00:00
@@ -85,7 +85,9 @@
             { id: 3, topic: 'Learning and Teaching', title: 'I Can Be Upgraded, Can You?', file: 'cartoon3_I_can_be_upgraded.jpg' },
             { id: 4, topic: 'Learning and Teaching', title: 'School ends, learning doesn\'t', file: 'cartoon4_school_ends_learning_doesnt.jpg' },
             { id: 5, topic: 'Learning and Teaching', title: 'Writing is just like texting', file: 'cartoon5_writing_is_like_texting.jpg' },
-            { id: 6, topic: 'Learning and Teaching', title: 'If you can\'t beat \'em...', file: 'cartoon6_text_me_your_homework.jpg' }
+            { id: 6, topic: 'Learning and Teaching', title: 'If you can\'t beat \'em...', file: 'cartoon6_text_me_your_homework.jpg' },
+            { id: 7, topic: 'Digital Devices', title: 'Always Connected', file: 'cartoon7_always_connected.jpg' },
+            { id: 8, topic: 'Digital Devices', title: 'Screen Time in Class', file: 'cartoon8_screen_time.jpg' }
         ];
 
         const DISCUSSION_PHRASES = {
@@ -103,6 +105,7 @@
         ];
 
         let state = { 
+            mode: 'practice', // 'practice' or 'exam'
             topic: null, 
             studentA: null, 
             studentB: null, 
@@ -157,27 +160,48 @@
 
         function renderStart() {
             stopTimer();
+            document.getElementById('mode-badge').innerText = "Simulator Ready";
             viewContainer.innerHTML = `
                 <div class="exam-card p-8 text-center max-w-lg mx-auto">
-                    <h2 class="text-xl font-bold mb-6 italic text-slate-600">Choose Topic & Preparation Time</h2>
+                    <h2 class="text-xl font-bold mb-6 italic text-slate-600">Select Mode & Topic</h2>
+                    
+                    <div class="mb-6">
+                        <label class="block text-xs font-bold uppercase text-slate-400 mb-2">Simulated Environment</label>
+                        <div class="flex gap-2 justify-center">
+                            <button id="mode-practice" onclick="setMode('practice')" class="flex-1 py-2 px-4 rounded border-2 border-blue-600 bg-blue-50 text-blue-700 font-bold text-sm">Practice Mode<br><span class="text-[10px] font-normal">With help & guidance</span></button>
+                            <button id="mode-exam" onclick="setMode('exam')" class="flex-1 py-2 px-4 rounded border-2 border-slate-200 text-slate-600 font-bold text-sm">Exam Mode<br><span class="text-[10px] font-normal">No guidance</span></button>
+                        </div>
+                    </div>
+
                     <div class="space-y-4">
+                        <label class="block text-xs font-bold uppercase text-slate-400 mb-2">Preparation Time</label>
                         <select id="prep-time-select" class="w-full p-2 border rounded-lg mb-4">
                             <option value="300">5 Minutes (Standard Prep)</option>
                             <option value="600">10 Minutes (Longer Prep)</option>
                             <option value="900">15 Minutes (Extended Prep)</option>
                             <option value="10">10 Seconds (Testing)</option>
                         </select>
-                        <button onclick="startPrep('Learning and Teaching')" class="btn-primary w-full">Learning and Teaching</button>
-                        <button onclick="startPrep('Health Education')" class="btn-primary w-full">Health Education</button>
+                        <button onclick="startPrep('Learning and Teaching')" class="btn-primary w-full">Topic: Learning and Teaching</button>
+                        <button onclick="startPrep('Health Education')" class="btn-primary w-full">Topic: Health Education</button>
+                        <button onclick="startPrep('Digital Devices')" class="btn-primary w-full">Topic: Digital Devices in the Classroom</button>
                     </div>
                 </div>
             `;
         }
 
+        function setMode(mode) {
+            state.mode = mode;
+            document.getElementById('mode-practice').className = mode === 'practice' ? 'flex-1 py-2 px-4 rounded border-2 border-blue-600 bg-blue-50 text-blue-700 font-bold text-sm' : 'flex-1 py-2 px-4 rounded border-2 border-slate-200 text-slate-600 font-bold text-sm';
+            document.getElementById('mode-exam').className = mode === 'exam' ? 'flex-1 py-2 px-4 rounded border-2 border-blue-600 bg-blue-50 text-blue-700 font-bold text-sm' : 'flex-1 py-2 px-4 rounded border-2 border-slate-200 text-slate-600 font-bold text-sm';
+        }
+
         function startPrep(topic) {
             state.topic = topic;
+            document.getElementById('mode-badge').innerText = `${state.mode.toUpperCase()} MODE: ${topic}`;
             const time = parseInt(document.getElementById('prep-time-select').value);
-            let pool = CARTOONS.filter(c => c.topic === topic);
+            
+            // Filter pool by topic
+            let pool = CARTOONS.filter(c => c.topic.includes(topic) || topic.includes(c.topic));
             const shuffled = pool.sort(() => 0.5 - Math.random());
             state.studentA = shuffled[0];
             state.studentB = shuffled[1] || shuffled[0];
@@ -195,17 +219,17 @@
                     <div class="exam-card p-4">
                         <h3 class="font-bold text-blue-600 mb-2">Student A</h3>
                         <div class="cartoon-container mb-4" onclick="openZoom('${state.studentA.file}')"><img src="${state.studentA.file}"></div>
-                        <p class="text-[10px] text-slate-400 mb-2">Topic: ${state.studentA.title}</p>
-                        <textarea id="notes-a" class="w-full border p-2 text-sm rounded h-40" placeholder="Analyze the cartoon here..."></textarea>
+                        <p class="text-[10px] text-slate-400 mb-2">Cartoon: ${state.studentA.title}</p>
+                        <textarea id="notes-a" class="w-full border p-2 text-sm rounded h-40" placeholder="Prepare your analysis..."></textarea>
                     </div>
                     <div class="exam-card p-4">
                         <h3 class="font-bold text-green-600 mb-2">Student B</h3>
                         <div class="cartoon-container mb-4" onclick="openZoom('${state.studentB.file}')"><img src="${state.studentB.file}"></div>
-                        <p class="text-[10px] text-slate-400 mb-2">Topic: ${state.studentB.title}</p>
-                        <textarea id="notes-b" class="w-full border p-2 text-sm rounded h-40" placeholder="Analyze the cartoon here..."></textarea>
+                        <p class="text-[10px] text-slate-400 mb-2">Cartoon: ${state.studentB.title}</p>
+                        <textarea id="notes-b" class="w-full border p-2 text-sm rounded h-40" placeholder="Prepare your analysis..."></textarea>
                     </div>
                     <div class="md:col-span-2 text-center">
-                        <button onclick="saveNotes()" class="btn-primary w-full md:w-64">Ready Before Time?</button>
+                        <button onclick="saveNotes()" class="btn-primary w-full md:w-64">Ready to Speak</button>
                     </div>
                 </div>
             `;
@@ -221,7 +245,6 @@
             const cartoon = student === 'A' ? state.studentA : state.studentB;
             const next = student === 'A' ? "renderExam('B')" : "renderDiscussion()";
             
-            // Set 3 minute timer for monologue
             startTimer(180, () => {
                 alert(`Time is up for Student ${student}!`);
             });
@@ -233,27 +256,28 @@
                         <span class="text-xs bg-slate-100 px-2 py-1 rounded">3 Minute Limit</span>
                     </div>
                     <div class="cartoon-container h-64 mb-6"><img src="${cartoon.file}"></div>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                    <div class="grid grid-cols-1 ${state.mode === 'practice' ? 'md:grid-cols-2' : ''} gap-4 mb-6">
                         <div class="bg-blue-50 p-4 rounded-lg">
                             <h4 class="font-bold text-xs mb-2 uppercase">Your Notes:</h4>
-                            <p class="text-sm italic text-slate-700 whitespace-pre-wrap">${student === 'A' ? state.notesA : state.notesB || 'No notes taken.'}</p>
+                            <p class="text-sm italic text-slate-700 whitespace-pre-wrap">${(student === 'A' ? state.notesA : state.notesB) || 'No notes taken.'}</p>
                         </div>
+                        ${state.mode === 'practice' ? `
                         <div class="bg-slate-50 p-4 rounded-lg text-sm">
-                            <h4 class="font-bold text-xs mb-2 uppercase">Expectations:</h4>
-                            <ul class="list-disc ml-4 space-y-1">
-                                <li>Describe details</li>
-                                <li>Explain message</li>
-                                <li>State opinion</li>
+                            <h4 class="font-bold text-xs mb-2 uppercase">Guidance:</h4>
+                            <ul class="list-disc ml-4 space-y-1 text-slate-600">
+                                <li>Describe specific details</li>
+                                <li>Analyse the irony/message</li>
+                                <li>Personal evaluation</li>
                             </ul>
                         </div>
+                        ` : ''}
                     </div>
-                    <button onclick="${next}" class="btn-primary w-full">Next Phase</button>
+                    <button onclick="${next}" class="btn-primary w-full">Next Student</button>
                 </div>
             `;
         }
 
         function renderDiscussion() {
-            // Set 10 minute timer for discussion (600 seconds)
             startTimer(600, () => {
                 alert("Discussion time is over.");
                 renderFinal();
@@ -268,12 +292,16 @@
                     <div class="p-4 border-l-4 border-blue-500 bg-slate-50 mb-6">
                         <p class="font-medium">"Discuss how the issues shown in both cartoons affect society today and what changes might be necessary."</p>
                     </div>
+                    
+                    ${state.mode === 'practice' ? `
                     <div class="grid grid-cols-2 gap-4 text-xs mb-6">
                         ${Object.entries(DISCUSSION_PHRASES).map(([cat, ph]) => `
                             <div><strong class="text-blue-600">${cat}:</strong><ul class="mt-1">${ph.map(p => `<li>• ${p}</li>`).join('')}</ul></div>
                         `).join('')}
                     </div>
-                    <button onclick="renderFinal()" class="btn-primary w-full">Complete Exam</button>
+                    ` : '<div class="h-32 flex items-center justify-center italic text-slate-400 border-2 border-dashed rounded-lg mb-6">Exam Mode: No phrase guidance provided.</div>'}
+                    
+                    <button onclick="renderFinal()" class="btn-primary w-full">Finish Session</button>
                 </div>
             `;
         }
@@ -282,12 +310,12 @@
             stopTimer();
             viewContainer.innerHTML = `
                 <div class="max-w-lg mx-auto text-center exam-card p-8">
-                    <h2 class="text-2xl font-bold mb-2">Exam Complete!</h2>
-                    <p class="text-slate-500 mb-6">Self-Reflection Phase</p>
+                    <h2 class="text-2xl font-bold mb-2">Practice Session Ended</h2>
+                    <p class="text-slate-500 mb-6">Student Self-Assessment</p>
                     <div class="text-left space-y-2 mb-8">
                         ${SELF_EVAL_CRITERIA.map(c => `<label class="checkbox-item border-b"><input type="checkbox" class="w-4 h-4"> <span class="text-sm">${c}</span></label>`).join('')}
                     </div>
-                    <button onclick="renderStart()" class="btn-outline w-full">Back to Start</button>
+                    <button onclick="renderStart()" class="btn-outline w-full">Return to Menu</button>
                 </div>
             `;
         }
