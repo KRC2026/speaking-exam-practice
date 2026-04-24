@@ -105,7 +105,7 @@
         ];
 
         let state = { 
-            mode: 'practice', // 'practice' or 'exam'
+            mode: 'practice', 
             topic: null, 
             studentA: null, 
             studentB: null, 
@@ -168,8 +168,8 @@
                     <div class="mb-6">
                         <label class="block text-xs font-bold uppercase text-slate-400 mb-2">Simulated Environment</label>
                         <div class="flex gap-2 justify-center">
-                            <button id="mode-practice" onclick="setMode('practice')" class="flex-1 py-2 px-4 rounded border-2 border-blue-600 bg-blue-50 text-blue-700 font-bold text-sm">Practice Mode<br><span class="text-[10px] font-normal">With help & guidance</span></button>
-                            <button id="mode-exam" onclick="setMode('exam')" class="flex-1 py-2 px-4 rounded border-2 border-slate-200 text-slate-600 font-bold text-sm">Exam Mode<br><span class="text-[10px] font-normal">No guidance</span></button>
+                            <button id="mode-practice" onclick="setMode('practice')" class="flex-1 py-2 px-4 rounded border-2 ${state.mode === 'practice' ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-slate-200 text-slate-600'} font-bold text-sm">Practice Mode<br><span class="text-[10px] font-normal">With help & guidance</span></button>
+                            <button id="mode-exam" onclick="setMode('exam')" class="flex-1 py-2 px-4 rounded border-2 ${state.mode === 'exam' ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-slate-200 text-slate-600'} font-bold text-sm">Exam Mode<br><span class="text-[10px] font-normal">No guidance</span></button>
                         </div>
                     </div>
 
@@ -181,9 +181,9 @@
                             <option value="900">15 Minutes (Extended Prep)</option>
                             <option value="10">10 Seconds (Testing)</option>
                         </select>
-                        <button onclick="startPrep('Learning and Teaching')" class="btn-primary w-full">Topic: Learning and Teaching</button>
-                        <button onclick="startPrep('Health Education')" class="btn-primary w-full">Topic: Health Education</button>
-                        <button onclick="startPrep('Digital Devices')" class="btn-primary w-full">Topic: Digital Devices in the Classroom</button>
+                        <button onclick="startPrep('Learning and Teaching')" class="btn-primary w-full text-sm">Topic: Learning and Teaching</button>
+                        <button onclick="startPrep('Health Education')" class="btn-primary w-full text-sm">Topic: Health Education</button>
+                        <button onclick="startPrep('Digital Devices')" class="btn-primary w-full text-sm">Topic: Digital Devices</button>
                     </div>
                 </div>
             `;
@@ -200,8 +200,7 @@
             document.getElementById('mode-badge').innerText = `${state.mode.toUpperCase()} MODE: ${topic}`;
             const time = parseInt(document.getElementById('prep-time-select').value);
             
-            // Filter pool by topic
-            let pool = CARTOONS.filter(c => c.topic.includes(topic) || topic.includes(c.topic));
+            let pool = CARTOONS.filter(c => c.topic === topic);
             const shuffled = pool.sort(() => 0.5 - Math.random());
             state.studentA = shuffled[0];
             state.studentB = shuffled[1] || shuffled[0];
@@ -218,13 +217,13 @@
                 <div class="grid md:grid-cols-2 gap-6">
                     <div class="exam-card p-4">
                         <h3 class="font-bold text-blue-600 mb-2">Student A</h3>
-                        <div class="cartoon-container mb-4" onclick="openZoom('${state.studentA.file}')"><img src="${state.studentA.file}"></div>
+                        <div class="cartoon-container mb-4" onclick="openZoom('${state.studentA.file}')"><img src="${state.studentA.file}" alt="${state.studentA.title}"></div>
                         <p class="text-[10px] text-slate-400 mb-2">Cartoon: ${state.studentA.title}</p>
                         <textarea id="notes-a" class="w-full border p-2 text-sm rounded h-40" placeholder="Prepare your analysis..."></textarea>
                     </div>
                     <div class="exam-card p-4">
                         <h3 class="font-bold text-green-600 mb-2">Student B</h3>
-                        <div class="cartoon-container mb-4" onclick="openZoom('${state.studentB.file}')"><img src="${state.studentB.file}"></div>
+                        <div class="cartoon-container mb-4" onclick="openZoom('${state.studentB.file}')"><img src="${state.studentB.file}" alt="${state.studentB.title}"></div>
                         <p class="text-[10px] text-slate-400 mb-2">Cartoon: ${state.studentB.title}</p>
                         <textarea id="notes-b" class="w-full border p-2 text-sm rounded h-40" placeholder="Prepare your analysis..."></textarea>
                     </div>
@@ -255,7 +254,7 @@
                         <h2 class="text-xl font-bold">Student ${student} Presentation</h2>
                         <span class="text-xs bg-slate-100 px-2 py-1 rounded">3 Minute Limit</span>
                     </div>
-                    <div class="cartoon-container h-64 mb-6"><img src="${cartoon.file}"></div>
+                    <div class="cartoon-container h-64 mb-6"><img src="${cartoon.file}" alt="${cartoon.title}"></div>
                     <div class="grid grid-cols-1 ${state.mode === 'practice' ? 'md:grid-cols-2' : ''} gap-4 mb-6">
                         <div class="bg-blue-50 p-4 rounded-lg">
                             <h4 class="font-bold text-xs mb-2 uppercase">Your Notes:</h4>
@@ -272,7 +271,7 @@
                         </div>
                         ` : ''}
                     </div>
-                    <button onclick="${next}" class="btn-primary w-full">Next Student</button>
+                    <button onclick="${next}" class="btn-primary w-full">Next Phase</button>
                 </div>
             `;
         }
@@ -290,7 +289,7 @@
                         <span class="text-xs bg-slate-100 px-2 py-1 rounded">10 Minute Limit</span>
                     </div>
                     <div class="p-4 border-l-4 border-blue-500 bg-slate-50 mb-6">
-                        <p class="font-medium">"Discuss how the issues shown in both cartoons affect society today and what changes might be necessary."</p>
+                        <p class="font-medium text-slate-700">"Discuss how the issues shown in both cartoons affect society today and what changes might be necessary."</p>
                     </div>
                     
                     ${state.mode === 'practice' ? `
