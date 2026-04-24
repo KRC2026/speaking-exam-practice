@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Oral Exam Practice App</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; color: #1e293b; }
+        .exam-card { border: 1px solid #e2e8f0; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border-radius: 8px; }
+        .btn-primary { background-color: #2563eb; color: white; transition: all 0.2s; border-radius: 8px; padding: 10px 20px; font-weight: 600; }
+        .btn-primary:hover { background-color: #1d4ed8; }
+        .btn-outline { border: 2px solid #e2e8f0; border-radius: 8px; padding: 10px 20px; transition: all 0.2s; }
+        .btn-outline:hover { background-color: #f1f5f9; border-color: #cbd5e1; }
+        
+        .timer-active { color: #2563eb; font-weight: bold; }
+        .timer-warning { color: #dc2626; font-weight: bold; animation: pulse 1s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+        .cartoon-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #f1f5f9;
+            overflow: hidden;
+            cursor: zoom-in;
+            border: 1px solid #e2e8f0;
+            border-radius: 4px;
+            height: 300px;
+        }
+        .cartoon-container img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+        .zoom-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.9);
+            display: none;
+            z-index: 1000;
+            cursor: zoom-out;
+            align-items: center;
+            justify-content: center;
+        }
+        .zoom-overlay img { max-width: 95vw; max-height: 95vh; }
+        
+        .checkbox-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 8px;
+            cursor: pointer;
+        }
+        .checkbox-item:hover { background-color: #f1f5f9; border-radius: 4px; }
+    </style>
+</head>
+<body class="min-h-screen p-4 md:p-8">
+
+    <div id="app" class="max-w-5xl mx-auto">
+        <header class="mb-8 flex flex-col md:flex-row justify-between items-center border-b pb-4 gap-4">
+            <div>
+                <h1 class="text-3xl font-bold text-slate-900">Oral Exam Practice</h1>
+                <p id="mode-badge" class="text-sm font-semibold uppercase tracking-wider text-blue-600">Ready</p>
+            </div>
+            <div id="timer-display" class="text-2xl font-mono bg-slate-100 px-6 py-2 rounded-lg border hidden">
+                00:00
+            </div>
+        </header>
+        <main id="view-container"></main>
+    </div>
+
+    <div id="zoom-modal" class="zoom-overlay" onclick="closeZoom()">
+        <img id="zoomed-image" src="" alt="Zoomed view">
+    </div>
+
+    <script>
+        // DATA: Defined with specific topic keys
+        const CARTOONS = [
+            { id: 1, topic: 'Health Education', title: 'Big Problem', file: 'cartoon1_big_problem.jpg' },
+            { id: 2, topic: 'Health Education', title: 'Child Obesity', file: 'cartoon2_health_education.jpg' },
+            { id: 3, topic: 'Learning and Teaching', title: 'I Can Be Upgraded, Can You?', file: 'cartoon3_I_can_be_upgraded.jpg' },
+            { id: 4, topic: 'Learning and Teaching', title: 'School ends, learning doesn\'t', file: 'cartoon4_school_ends_learning_doesnt.jpg' },
+            { id: 5, topic: 'Learning and Teaching', title: 'Writing is just like texting', file: 'cartoon5_writing_is_like_texting.jpg' },
+            { id: 6, topic: 'Learning and Teaching', title: 'If you can\'t beat \'em...', file: 'cartoon6_text_me_your_homework.jpg' },
+            { id: 7, topic: 'Digital Devices', title: 'Always Connected', file: 'cartoon7_always_connected.jpg' },
+            { id: 8, topic: 'Digital Devices', title: 'Screen Time in Class', file: 'cartoon8_screen_time.jpg' }
+        ];
+
+        const DISCUSSION_PHRASES = {
+            "Starting": ["Let's begin with...", "Shall we start by looking at..."],
+            "Opinions": ["In my opinion...", "I'm of the mind that...", "As I see it..."],
+            "Agreement": ["I completely agree.", "That's a valid point.", "I see what you mean, but..."],
+            "Closing": ["To wrap up...", "In conclusion...", "Overall, we can say..."]
+        };
+
+        const SELF_EVAL_CRITERIA = [
+            "I addressed all three parts: describe, analyse, evaluate.",
+            "I used advanced vocabulary and linking words.",
+            "I responded actively to my partner's points.",
+            "I spoke fluently with minimal hesitation."
+        ];
+
+        let state = { 
+            mode: 'practice', 
+            topic: null, 
+            studentA: null, 
+            studentB: null, 
+            notesA: "", 
+            notesB: "",
+            timeLeft: 0,
+            timerInterval: null
+        };
+
+        const viewContainer = document.getElementById('view-container');
+        const timerDisplay = document.getElementById('timer-display');
+
+        function startTimer(seconds, onComplete) {
+            clearInterval(state.timerInterval);
+            state.timeLeft = seconds;
+            timerDisplay.classList.remove('hidden');
+            updateTimerUI();
+
+            state.timerInterval = setInterval(() => {
+                state.timeLeft--;
+                updateTimerUI();
+                if (state.timeLeft <= 0) {
+                    clearInterval(state.timerInterval);
+                    if (onComplete) onComplete();
+                }
+            }, 1000);
+        }
+
+        function updateTimerUI() {
+            const mins = Math.floor(state.timeLeft / 60);
+            const secs = state.timeLeft % 60;
+            timerDisplay.innerText = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+            
+            if (state.timeLeft < 30) {
+                timerDisplay.className = "text-2xl font-mono bg-red-50 px-6 py-2 rounded-lg border border-red-200 timer-warning";
+            } else {
+                timerDisplay.className = "text-2xl font-mono bg-slate-100 px-6 py-2 rounded-lg border timer-active";
+            }
+        }
+
+        function stopTimer() {
+            clearInterval(state.timerInterval);
+            timerDisplay.classList.add('hidden');
+        }
+
+        function openZoom(src) {
+            document.getElementById('zoomed-image').src = src;
+            document.getElementById('zoom-modal').style.display = 'flex';
+        }
+
+        function closeZoom() { document.getElementById('zoom-modal').style.display = 'none'; }
+
+        function renderStart() {
+            stopTimer();
+            document.getElementById('mode-badge').innerText = "Simulator Ready";
+            viewContainer.innerHTML = `
+                <div class="exam-card p-8 text-center max-w-lg mx-auto">
+                    <h2 class="text-xl font-bold mb-6 italic text-slate-600">Select Mode & Topic</h2>
+                    
+                    <div class="mb-6">
+                        <label class="block text-xs font-bold uppercase text-slate-400 mb-2">Simulated Environment</label>
+                        <div class="flex gap-2 justify-center">
+                            <button id="mode-practice" onclick="setMode('practice')" class="flex-1 py-2 px-4 rounded border-2 ${state.mode === 'practice' ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-slate-200 text-slate-600'} font-bold text-sm">Practice Mode<br><span class="text-[10px] font-normal">With help & guidance</span></button>
+                            <button id="mode-exam" onclick="setMode('exam')" class="flex-1 py-2 px-4 rounded border-2 ${state.mode === 'exam' ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-slate-200 text-slate-600'} font-bold text-sm">Exam Mode<br><span class="text-[10px] font-normal">No guidance</span></button>
+                        </div>
+                    </div>
+
+                    <div class="space-y-4">
+                        <label class="block text-xs font-bold uppercase text-slate-400 mb-2">Preparation Time</label>
+                        <select id="prep-time-select" class="w-full p-2 border rounded-lg mb-4">
+                            <option value="300">5 Minutes (Standard Prep)</option>
+                            <option value="600">10 Minutes (Longer Prep)</option>
+                            <option value="900">15 Minutes (Extended Prep)</option>
+                            <option value="10">10 Seconds (Testing)</option>
+                        </select>
+                        <button onclick="startPrep('Learning and Teaching')" class="btn-primary w-full text-sm">Topic: Learning and Teaching</button>
+                        <button onclick="startPrep('Health Education')" class="btn-primary w-full text-sm">Topic: Health Education</button>
+                        <button onclick="startPrep('Digital Devices')" class="btn-primary w-full text-sm">Topic: Digital Devices</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function setMode(mode) {
+            state.mode = mode;
+            document.getElementById('mode-practice').className = mode === 'practice' ? 'flex-1 py-2 px-4 rounded border-2 border-blue-600 bg-blue-50 text-blue-700 font-bold text-sm' : 'flex-1 py-2 px-4 rounded border-2 border-slate-200 text-slate-600 font-bold text-sm';
+            document.getElementById('mode-exam').className = mode === 'exam' ? 'flex-1 py-2 px-4 rounded border-2 border-blue-600 bg-blue-50 text-blue-700 font-bold text-sm' : 'flex-1 py-2 px-4 rounded border-2 border-slate-200 text-slate-600 font-bold text-sm';
+        }
+
+        function startPrep(topic) {
+            state.topic = topic;
+            document.getElementById('mode-badge').innerText = `${state.mode.toUpperCase()} MODE: ${topic}`;
+            const time = parseInt(document.getElementById('prep-time-select').value);
+            
+            // Logic to match buttons with the CARTOONS array topics
+            let pool = CARTOONS.filter(c => c.topic === topic);
+            
+            if (pool.length === 0) {
+                console.error("No cartoons found for topic:", topic);
+                alert("Error: No cartoons found for this topic.");
+                return;
+            }
+
+            const shuffled = pool.sort(() => 0.5 - Math.random());
+            state.studentA = shuffled[0];
+            state.studentB = shuffled.length > 1 ? shuffled[1] : shuffled[0];
+            
+            renderPrep();
+            startTimer(time, () => {
+                alert("Preparation time is up! Moving to presentation.");
+                saveNotes();
+            });
+        }
+
+        function renderPrep() {
+            viewContainer.innerHTML = `
+                <div class="grid md:grid-cols-2 gap-6">
+                    <div class="exam-card p-4">
+                        <h3 class="font-bold text-blue-600 mb-2">Student A</h3>
+                        <div class="cartoon-container mb-4" onclick="openZoom('${state.studentA.file}')">
+                            <img src="${state.studentA.file}" alt="${state.studentA.title}" onerror="this.src='https://via.placeholder.com/400x300?text=Cartoon+Image+Missing'">
+                        </div>
+                        <p class="text-[10px] text-slate-400 mb-2">Cartoon: ${state.studentA.title}</p>
+                        <textarea id="notes-a" class="w-full border p-2 text-sm rounded h-40" placeholder="Prepare your analysis..."></textarea>
+                    </div>
+                    <div class="exam-card p-4">
+                        <h3 class="font-bold text-green-600 mb-2">Student B</h3>
+                        <div class="cartoon-container mb-4" onclick="openZoom('${state.studentB.file}')">
+                            <img src="${state.studentB.file}" alt="${state.studentB.title}" onerror="this.src='https://via.placeholder.com/400x300?text=Cartoon+Image+Missing'">
+                        </div>
+                        <p class="text-[10px] text-slate-400 mb-2">Cartoon: ${state.studentB.title}</p>
+                        <textarea id="notes-b" class="w-full border p-2 text-sm rounded h-40" placeholder="Prepare your analysis..."></textarea>
+                    </div>
+                    <div class="md:col-span-2 text-center">
+                        <button onclick="saveNotes()" class="btn-primary w-full md:w-64">Ready to Speak</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function saveNotes() {
+            state.notesA = document.getElementById('notes-a').value;
+            state.notesB = document.getElementById('notes-b').value;
+            renderExam('A');
+        }
+
+        function renderExam(student) {
+            const cartoon = student === 'A' ? state.studentA : state.studentB;
+            const next = student === 'A' ? "renderExam('B')" : "renderDiscussion()";
+            
+            startTimer(180, () => {
+                alert(`Time is up for Student ${student}!`);
+            });
+
+            viewContainer.innerHTML = `
+                <div class="max-w-2xl mx-auto exam-card p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-bold">Student ${student} Presentation</h2>
+                        <span class="text-xs bg-slate-100 px-2 py-1 rounded">3 Minute Limit</span>
+                    </div>
+                    <div class="cartoon-container h-64 mb-6">
+                        <img src="${cartoon.file}" alt="${cartoon.title}" onerror="this.src='https://via.placeholder.com/400x300?text=Cartoon+Image+Missing'">
+                    </div>
+                    <div class="grid grid-cols-1 ${state.mode === 'practice' ? 'md:grid-cols-2' : ''} gap-4 mb-6">
+                        <div class="bg-blue-50 p-4 rounded-lg">
+                            <h4 class="font-bold text-xs mb-2 uppercase">Your Notes:</h4>
+                            <p class="text-sm italic text-slate-700 whitespace-pre-wrap">${(student === 'A' ? state.notesA : state.notesB) || 'No notes taken.'}</p>
+                        </div>
+                        ${state.mode === 'practice' ? `
+                        <div class="bg-slate-50 p-4 rounded-lg text-sm">
+                            <h4 class="font-bold text-xs mb-2 uppercase">Guidance:</h4>
+                            <ul class="list-disc ml-4 space-y-1 text-slate-600">
+                                <li>Describe specific details</li>
+                                <li>Analyse the irony/message</li>
+                                <li>Personal evaluation</li>
+                            </ul>
+                        </div>
+                        ` : ''}
+                    </div>
+                    <button onclick="${next}" class="btn-primary w-full">Next Phase</button>
+                </div>
+            `;
+        }
+
+        function renderDiscussion() {
+            startTimer(600, () => {
+                alert("Discussion time is over.");
+                renderFinal();
+            });
+
+            viewContainer.innerHTML = `
+                <div class="max-w-2xl mx-auto exam-card p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-bold">Pair Discussion</h2>
+                        <span class="text-xs bg-slate-100 px-2 py-1 rounded">10 Minute Limit</span>
+                    </div>
+                    <div class="p-4 border-l-4 border-blue-500 bg-slate-50 mb-6">
+                        <p class="font-medium text-slate-700">"Discuss how the issues shown in both cartoons affect society today and what changes might be necessary."</p>
+                    </div>
+                    
+                    ${state.mode === 'practice' ? `
+                    <div class="grid grid-cols-2 gap-4 text-xs mb-6">
+                        ${Object.entries(DISCUSSION_PHRASES).map(([cat, ph]) => `
+                            <div><strong class="text-blue-600">${cat}:</strong><ul class="mt-1">${ph.map(p => `<li>• ${p}</li>`).join('')}</ul></div>
+                        `).join('')}
+                    </div>
+                    ` : '<div class="h-32 flex items-center justify-center italic text-slate-400 border-2 border-dashed rounded-lg mb-6">Exam Mode: No phrase guidance provided.</div>'}
+                    
+                    <button onclick="renderFinal()" class="btn-primary w-full">Finish Session</button>
+                </div>
+            `;
+        }
+
+        function renderFinal() {
+            stopTimer();
+            viewContainer.innerHTML = `
+                <div class="max-w-lg mx-auto text-center exam-card p-8">
+                    <h2 class="text-2xl font-bold mb-2">Practice Session Ended</h2>
+                    <p class="text-slate-500 mb-6">Student Self-Assessment</p>
+                    <div class="text-left space-y-2 mb-8">
+                        ${SELF_EVAL_CRITERIA.map(c => `<label class="checkbox-item border-b"><input type="checkbox" class="w-4 h-4"> <span class="text-sm">${c}</span></label>`).join('')}
+                    </div>
+                    <button onclick="renderStart()" class="btn-outline w-full">Return to Menu</button>
+                </div>
+            `;
+        }
+
+        window.onload = renderStart;
+    </script>
+</body>
+</html>
