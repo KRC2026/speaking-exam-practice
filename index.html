@@ -79,6 +79,7 @@
     </div>
 
     <script>
+        // DATA: Defined with specific topic keys
         const CARTOONS = [
             { id: 1, topic: 'Health Education', title: 'Big Problem', file: 'cartoon1_big_problem.jpg' },
             { id: 2, topic: 'Health Education', title: 'Child Obesity', file: 'cartoon2_health_education.jpg' },
@@ -200,10 +201,18 @@
             document.getElementById('mode-badge').innerText = `${state.mode.toUpperCase()} MODE: ${topic}`;
             const time = parseInt(document.getElementById('prep-time-select').value);
             
+            // Filtering logic: matches the 'topic' field in the CARTOONS array
             let pool = CARTOONS.filter(c => c.topic === topic);
+            
+            if (pool.length === 0) {
+                console.error("No cartoons found for topic:", topic);
+                alert("Error: No cartoons found for this topic.");
+                return;
+            }
+
             const shuffled = pool.sort(() => 0.5 - Math.random());
             state.studentA = shuffled[0];
-            state.studentB = shuffled[1] || shuffled[0];
+            state.studentB = shuffled.length > 1 ? shuffled[1] : shuffled[0];
             
             renderPrep();
             startTimer(time, () => {
@@ -217,13 +226,13 @@
                 <div class="grid md:grid-cols-2 gap-6">
                     <div class="exam-card p-4">
                         <h3 class="font-bold text-blue-600 mb-2">Student A</h3>
-                        <div class="cartoon-container mb-4" onclick="openZoom('${state.studentA.file}')"><img src="${state.studentA.file}" alt="${state.studentA.title}"></div>
+                        <div class="cartoon-container mb-4" onclick="openZoom('${state.studentA.file}')"><img src="${state.studentA.file}" alt="${state.studentA.title}" onerror="this.src='https://via.placeholder.com/400x300?text=Cartoon+Image+Missing'"></div>
                         <p class="text-[10px] text-slate-400 mb-2">Cartoon: ${state.studentA.title}</p>
                         <textarea id="notes-a" class="w-full border p-2 text-sm rounded h-40" placeholder="Prepare your analysis..."></textarea>
                     </div>
                     <div class="exam-card p-4">
                         <h3 class="font-bold text-green-600 mb-2">Student B</h3>
-                        <div class="cartoon-container mb-4" onclick="openZoom('${state.studentB.file}')"><img src="${state.studentB.file}" alt="${state.studentB.title}"></div>
+                        <div class="cartoon-container mb-4" onclick="openZoom('${state.studentB.file}')"><img src="${state.studentB.file}" alt="${state.studentB.title}" onerror="this.src='https://via.placeholder.com/400x300?text=Cartoon+Image+Missing'"></div>
                         <p class="text-[10px] text-slate-400 mb-2">Cartoon: ${state.studentB.title}</p>
                         <textarea id="notes-b" class="w-full border p-2 text-sm rounded h-40" placeholder="Prepare your analysis..."></textarea>
                     </div>
@@ -254,7 +263,7 @@
                         <h2 class="text-xl font-bold">Student ${student} Presentation</h2>
                         <span class="text-xs bg-slate-100 px-2 py-1 rounded">3 Minute Limit</span>
                     </div>
-                    <div class="cartoon-container h-64 mb-6"><img src="${cartoon.file}" alt="${cartoon.title}"></div>
+                    <div class="cartoon-container h-64 mb-6"><img src="${cartoon.file}" alt="${cartoon.title}" onerror="this.src='https://via.placeholder.com/400x300?text=Cartoon+Image+Missing'"></div>
                     <div class="grid grid-cols-1 ${state.mode === 'practice' ? 'md:grid-cols-2' : ''} gap-4 mb-6">
                         <div class="bg-blue-50 p-4 rounded-lg">
                             <h4 class="font-bold text-xs mb-2 uppercase">Your Notes:</h4>
